@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Virtual environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE specific files
+.vscode/
+.idea/
+*.iml
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+*.spec # PyInstaller spec file
+
+# Temporary files
+*.swp
+*~
+*.bak
+*.tmp
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+logs/
+
+# Coverage reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# wheel CFLAGS, LDFLAGS, etc. files, see #594 Wheel command adds CFLAGS, LDFLAGS to env vars
+*.dist-info/
+*.data/
+
+# mypy cache
+.mypy_cache/
+
+# Ruff cache
+.ruff_cache/
+
+# PyInstaller
+*.spec # Already covered
+dist/ # Already covered
+build/ # Already covered
+__pycache__/ # Already covered
+# MANIFEST # PyInstaller manifest file (if generated separately)
+
+# User configurations - typically you might want to commit a template
+# but not user-specific files with secrets.
+# For this tool, .streamlit_labeling_configs stores user session data and named configs,
+# which are generally local. If API keys are input and saved there by the user,
+# then in a team/public repo scenario, this directory should be gitignored.
+# For a single-user local tool, it's fine to keep it.
+# For general purpose template, let's assume user specific:
+# .streamlit_labeling_configs/api_configs.json
+# .streamlit_labeling_configs/task_configs.json
+# If you want to ignore the entire directory:
+.streamlit_labeling_configs/
+
+# If you have a separate run_tool.py for packaging in the root,
+# and you don't want to commit it if it's just a helper:
+# run_tool.py
