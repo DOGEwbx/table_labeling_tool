@@ -64,7 +64,7 @@ htmlcov/
 *.spec # Already covered
 dist/ # Already covered
 build/ # Already covered
-__pycache__/ # Already covered
+**/__pycache__/
 # MANIFEST # PyInstaller manifest file (if generated separately)
 
 # User configurations - typically you might want to commit a template
