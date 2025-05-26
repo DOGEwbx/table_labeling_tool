@@ -1,4 +1,3 @@
-```markdown
 # 表格数据AI打标与处理工具 (Table Data AI Labeling and Processing Tool)
 
 🏷️ 本工具是一个基于Streamlit的Web应用程序，旨在帮助用户通过大型语言模型（LLM，如GPT系列）对表格数据（如CSV, Excel文件）进行自动化的数据标注、信息提取、分类等任务。
@@ -181,11 +180,7 @@ streamlit run app.py
     ```
     请注意，`--add-data` 的源路径 `table_labeling_tool` 和目标路径 `app_main` 需要与 `run_tool.py` 中的 `get_res_path` 逻辑对应。打包过程可能需要多次尝试和调整。
 
-## 📄 开源许可 (Placeholder)
-
-MIT License (或者您选择的其他许可)
 
 ---
 
 Happy Labeling! 🎉
-```
