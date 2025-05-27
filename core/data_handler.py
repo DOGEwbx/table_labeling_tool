@@ -4,23 +4,28 @@ import json
 import io
 from pathlib import Path
 from typing import Optional
+import streamlit as st
+import uuid # For generating unique filenames
 
-import streamlit as st # 用于 st.cache_data 和 st.error
+# --- 新增：定义上传数据持久化的目录 ---
+# 这会创建在 .streamlit_labeling_configs 文件夹内部
+PERSISTED_DATA_DIR = Path(".streamlit_labeling_configs") / "persisted_user_data"
+PERSISTED_DATA_DIR.mkdir(parents=True, exist_ok=True) # 启动时确保目录存在
 
-@st.cache_data # 使用 Streamlit 的缓存机制
+@st.cache_data
 def load_data_from_uploaded_file(file_content: bytes, file_name: str) -> Optional[pd.DataFrame]:
-    """从上传文件的内容和名称加载数据。"""
+    # ... (此函数不变) ...
     try:
         file_ext = file_name.split('.')[-1].lower()
         df = None
         if file_ext == 'csv':
-            for encoding in ['utf-8', 'gbk', 'gb2312', 'latin1']: # 尝试多种常用编码
+            for encoding in ['utf-8', 'gbk', 'gb2312', 'latin1']: 
                 try:
                     df = pd.read_csv(io.StringIO(file_content.decode(encoding)))
                     break
                 except UnicodeDecodeError:
                     continue
-            if df is None: # 如果所有解码失败，尝试直接用BytesIO
+            if df is None: 
                 df = pd.read_csv(io.BytesIO(file_content))
         elif file_ext in ['xlsx', 'xls']:
             df = pd.read_excel(io.BytesIO(file_content))
@@ -40,7 +45,7 @@ def load_data_from_uploaded_file(file_content: bytes, file_name: str) -> Optiona
 
 @st.cache_data
 def load_data_from_path(file_path: str) -> Optional[pd.DataFrame]:
-    """从指定文件路径加载数据。"""
+    # ... (此函数不变) ...
     try:
         path = Path(file_path)
         if not path.exists():
@@ -56,7 +61,7 @@ def load_data_from_path(file_path: str) -> Optional[pd.DataFrame]:
                     break
                 except UnicodeDecodeError:
                     continue
-            if df is None: # Fallback
+            if df is None: 
                  df = pd.read_csv(path)
         elif file_ext in ['xlsx', 'xls']:
             df = pd.read_excel(path)
@@ -76,11 +81,10 @@ def load_data_from_path(file_path: str) -> Optional[pd.DataFrame]:
         return None
 
 def save_dataframe_to_bytes(df: pd.DataFrame, format_type: str) -> bytes:
-    """将DataFrame保存为指定格式的字节流。"""
+    # ... (此函数不变) ...
     output = io.BytesIO()
     try:
         if format_type == 'csv':
-            # 使用 utf-8-sig 编码以确保Excel正确识别UTF-8 CSV中的非英文字符
             csv_string = df.to_csv(index=False, encoding='utf-8-sig')
             output.write(csv_string.encode('utf-8-sig'))
         elif format_type == 'xlsx':
@@ -89,7 +93,6 @@ def save_dataframe_to_bytes(df: pd.DataFrame, format_type: str) -> bytes:
         elif format_type == 'parquet':
             df.to_parquet(output, index=False)
         elif format_type == 'jsonl':
-            # 确保非ASCII字符正确处理
             jsonl_string = '\n'.join([row.to_json(force_ascii=False) for _, row in df.iterrows()])
             output.write(jsonl_string.encode('utf-8'))
         else:
@@ -99,3 +102,51 @@ def save_dataframe_to_bytes(df: pd.DataFrame, format_type: str) -> bytes:
     except Exception as e:
         st.error(f"保存DataFrame到 {format_type} 格式时出错: {str(e)}")
         return b""
+
+# --- 新增函数：持久化DataFrame到服务器 ---
+def persist_dataframe_on_server(df: pd.DataFrame, original_filename: str) -> Optional[str]:
+    """
+    将给定的DataFrame保存到服务器上的PERSISTED_DATA_DIR目录。
+    返回保存文件的绝对路径，如果失败则返回None。
+    """
+    if df is None:
+        st.error("无法持久化空的DataFrame。")
+        return None
+    if not original_filename: # 需要原始文件名来确定扩展名和基本名
+        original_filename = f"persisted_data_{uuid.uuid4().hex[:8]}.parquet" # 默认文件名
+        st.warning(f"未提供原始文件名，将使用默认名称: {original_filename}")
+
+
+    try:
+        # 从原始文件名中提取基本名称和扩展名
+        p_original_filename = Path(original_filename)
+        base_name = p_original_filename.stem
+        original_ext = p_original_filename.suffix.lower()
+
+        # 确定保存格式，优先使用Parquet以保证数据类型和效率
+        # 如果原始扩展名是已知的表格格式，可以考虑保留，否则用Parquet
+        if original_ext in ['.csv', '.xlsx', '.parquet']:
+            save_ext = original_ext
+        else:
+            save_ext = '.parquet' # 默认保存为Parquet
+
+        # 创建一个唯一的文件名以避免冲突
+        unique_id = uuid.uuid4().hex[:8]
+        new_filename = f"{base_name}_{unique_id}{save_ext}"
+        save_path = PERSISTED_DATA_DIR / new_filename
+
+        # 根据确定的扩展名保存文件
+        if save_ext == '.parquet':
+            df.to_parquet(save_path, index=False)
+        elif save_ext == '.csv':
+            df.to_csv(save_path, index=False, encoding='utf-8-sig')
+        elif save_ext == '.xlsx':
+            with pd.ExcelWriter(save_path, engine='openpyxl') as writer: # type: ignore
+                df.to_excel(writer, index=False)
+        
+        st.info(f"数据副本已保存到服务器路径: {save_path.resolve()}")
+        return str(save_path.resolve()) # 返回新保存文件的绝对路径
+
+    except Exception as e:
+        st.error(f"持久化数据 '{original_filename}' 到服务器时失败: {e}")
+        return None
