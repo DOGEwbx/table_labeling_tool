@@ -170,3 +170,9 @@ def display_data_load_tab():
 
     elif uploaded_file is None and st.session_state.get('df') is None:
         st.info("请上传一个数据文件开始。")
+    
+    # --- 新增：引导到下一步 ---
+    if st.session_state.get('df') is not None:
+        st.success("🎉 数据已成功加载或处于可编辑状态！")
+        st.info("下一步：请前往 **🎯 2. 定义打标任务** 标签页，开始定义您的第一个打标任务。")
+        st.markdown("---") # 可选的分隔线

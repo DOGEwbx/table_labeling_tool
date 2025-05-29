@@ -32,8 +32,8 @@ def init_session_state():
         else: # 后备默认值
             st.session_state.api_config = {
                 'api_key': '',
-                'base_url': '[https://api.openai.com/v1](https://api.openai.com/v1)',
-                'model_name': 'gpt-3.5-turbo',
+                'base_url': 'https://api.deepseek.com',
+                'model_name': 'deepseek-chat',
                 'temperature': 0.05,
                 'max_tokens': 1500
             }

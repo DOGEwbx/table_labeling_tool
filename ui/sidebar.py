@@ -186,13 +186,13 @@ def display_sidebar():
                     st.rerun()
 
             current_api_conf = st.session_state.setdefault('api_config', {
-                'api_key': '', 'base_url': 'https://api.openai.com/v1',
-                'model_name': 'gpt-3.5-turbo', 'temperature': 0.05, 'max_tokens': 1500
+                'api_key': '', 'base_url': 'https://api.deepseek.com',
+                'model_name': 'deepseek-chat', 'temperature': 0.05, 'max_tokens': 1500
             })
 
             api_key_val = st.text_input("API Key", value=current_api_conf.get('api_key', ''), type="password", key="sidebar_api_key")
-            base_url_val = st.text_input("Base URL", value=current_api_conf.get('base_url', 'https://api.openai.com/v1'), key="sidebar_base_url")
-            model_name_val = st.text_input("模型名称", value=current_api_conf.get('model_name', 'gpt-3.5-turbo'), key="sidebar_model_name")
+            base_url_val = st.text_input("Base URL", value=current_api_conf.get('base_url', 'https://api.deepseek.com'), key="sidebar_base_url")
+            model_name_val = st.text_input("模型名称", value=current_api_conf.get('model_name', 'deepseek-chat'), key="sidebar_model_name")
             temperature_val = st.slider("Temperature", 0.0, 2.0, float(current_api_conf.get('temperature', 0.05)), 0.01, key="sidebar_temperature")
             max_tokens_val = st.number_input("最大Token数 (响应)", 50, 32000, int(current_api_conf.get('max_tokens', 1500)), 50, key="sidebar_max_tokens") # Increased max_tokens limit
 

@@ -71,3 +71,10 @@ def display_add_task_tab():
                         st.rerun()
     else:
         st.info("尚未添加任何打标任务。请使用上方表单添加。")
+
+    # --- 新增：引导到下一步 ---
+    if st.session_state.get('labeling_tasks'):
+        num_tasks = len(st.session_state.labeling_tasks)
+        st.success(f"🎉 您已定义 {num_tasks} 个打标任务！")
+        st.info("下一步：请前往 **📝 3. 生成AI指令 (Prompt)** 标签页，为这些任务创建AI指令模板。")
+        st.markdown("---") # 可选的分隔线

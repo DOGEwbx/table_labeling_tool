@@ -1,5 +1,7 @@
 # 表格数据AI打标与处理工具 (Table Data AI Labeling and Processing Tool)
 
+体验链接: https://tablelabelingtool-bingxuan.streamlit.app/
+
 🏷️ 本工具是一个基于Streamlit的Web应用程序，旨在帮助用户通过大型语言模型（LLM，如GPT系列）对表格数据（如CSV, Excel文件）进行自动化的数据标注、信息提取、分类等任务。
 
 ## ✨ 主要功能
@@ -132,53 +134,9 @@ streamlit run app.py
 
 如果您希望将此应用分发给没有Python环境的用户，可以使用PyInstaller进行打包。这通常是一个复杂的过程，需要调试和处理依赖。
 
-1.  安装PyInstaller: `pip install pyinstaller`
-2.  创建一个启动脚本 (例如 `run_tool.py`，与 `table_labeling_tool` 文件夹同级)，用于以编程方式启动Streamlit服务。一个示例脚本如下：
-    ```python
-    # run_tool.py
-    import subprocess, sys, os, webbrowser, socket, time
-    from pathlib import Path
+可以参考[知乎回答](https://zhuanlan.zhihu.com/p/695939376)的教程
 
-    def find_free_port():
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('', 0)); return s.getsockname()[1]
-
-    def get_res_path(rel_path):
-        base = getattr(sys, '_MEIPASS', Path(__file__).resolve().parent)
-        return Path(base) / rel_path
-
-    if __name__ == "__main__":
-        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-            os.chdir(Path(sys.executable).parent) # 重要：切换工作目录
-            (Path(sys.executable).parent / ".streamlit_labeling_configs").mkdir(exist_ok=True)
-        
-        app_script = get_res_path("app_main/app.py") # 打包时app.py的路径
-        if not getattr(sys, 'frozen', False): # 开发模式下调整路径
-             app_script = Path("table_labeling_tool") / "app.py"
-
-
-        port = find_free_port()
-        cmd = ["streamlit", "run", str(app_script),
-               "--server.port", str(port), "--server.headless", "true",
-               "--server.fileWatcherType", "none"]
-        
-        print(f"Starting app at http://localhost:{port} with command: {' '.join(cmd)}")
-        proc = subprocess.Popen(cmd)
-        time.sleep(5) # 等待服务启动
-        webbrowser.open(f"http://localhost:{port}")
-        proc.wait()
-    ```
-3.  使用PyInstaller打包 `run_tool.py`：
-    ```bash
-    pyinstaller --name TableLabelerApp --noconsole --onedir run_tool.py \
-    --add-data "table_labeling_tool:app_main" \
-    --collect-data streamlit \
-    --hidden-import="PIL._imagingft" \
-    --hidden-import="PIL._imagingtk" \
-    --hidden-import="streamlit.web.cli" \
-    # ... 可能需要更多 --hidden-import
-    ```
-    请注意，`--add-data` 的源路径 `table_labeling_tool` 和目标路径 `app_main` 需要与 `run_tool.py` 中的 `get_res_path` 逻辑对应。打包过程可能需要多次尝试和调整。
+打包好的exe请点击[夸克网盘链接](https://pan.quark.cn/s/530f167e617b)
 
 
 ---

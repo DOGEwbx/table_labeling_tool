@@ -254,3 +254,11 @@ def display_run_labeling_tab():
                     if err_df_data: st.dataframe(pd.DataFrame(err_df_data), use_container_width=True)
         else:
             st.caption("当前运行未记录有效结果用于统计。")
+
+            # --- 新增：引导到下一步 ---
+    current_prog = st.session_state.get('labeling_progress', {})
+    if current_prog and current_prog.get('completed', 0) > 0 and not current_prog.get('is_running'):
+        if current_prog.get('results'): # 确保有结果
+            st.success("🎉 标注任务已执行！")
+            st.info("下一步：请前往 **📥 5. 下载与总结** 标签页，预览、统计并下载包含标注结果的数据。")
+            st.markdown("---") # 可选的分隔线

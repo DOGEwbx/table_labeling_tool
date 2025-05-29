@@ -92,3 +92,8 @@ def display_download_tab():
     except Exception as e:
         st.error(f"准备下载数据或统计时发生错误: {e}")
         st.exception(e)
+
+    # 在末尾可以加一个完成的提示
+    st.markdown("---")
+    st.balloons() # 小彩蛋，表示流程基本结束
+    st.info("您已完成所有主要步骤！如果需要处理新的数据或任务，可以从第一个标签页开始新的流程。")

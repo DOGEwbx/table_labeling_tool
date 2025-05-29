@@ -98,3 +98,13 @@ def display_prompt_generation_tab():
                     st.success("🎉 所有在最终用户Prompt中检测到的占位符都能在当前数据列中找到！")
         else:
             st.info("数据尚未加载，无法校验Prompt中的占位符与数据列是否匹配。")
+
+    # --- 新增：引导到下一步 ---
+    if st.session_state.get('final_user_prompt', "").strip():
+        st.success("🎉 AI指令 (Prompt) 已成功生成并可供预览！")
+        st.info("下一步：请前往 **🏷️ 4. 执行AI标注** 标签页，使用此Prompt进行试标注或全量标注。")
+        st.markdown("---") # 可选的分隔线
+    elif st.session_state.get('labeling_tasks') and st.session_state.get('api_config', {}).get('api_key'):
+        # 如果任务已定义且API key已配置，但Prompt未生成，可以提醒用户生成
+        if not st.session_state.get('generated_prompt_template', "").strip():
+            st.caption("👆 请点击上方的“🤖 向AI请求生成Prompt模板”按钮，或在编辑框中手动输入模板。")
