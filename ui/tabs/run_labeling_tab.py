@@ -26,6 +26,7 @@ def display_run_labeling_tab():
         st.warning("API密钥尚未配置。请在侧边栏设置。")
         return
 
+    # Use the (now improved) extract_placeholder_columns_from_final_prompt
     placeholders = extract_placeholder_columns_from_final_prompt(final_prompt)
     if not placeholders:
          st.error("❌ 最终用户Prompt中未找到任何数据占位符 (如 `{列名}`)。无法执行标注。请返回“生成Prompt”页面修改。")
@@ -37,23 +38,23 @@ def display_run_labeling_tab():
     st.success(f"✅ Prompt中的占位符 `{', '.join(placeholders)}` 均已在数据列中找到。可以开始标注。")
 
     # --- Test Labeling Section ---
-    st.subheader("🔬 试标注") # 更通用的标题
+    st.subheader("🔬 试标注") 
 
-    col_sample_method, col_num_rows = st.columns([1,1]) # 给radiobutton多一点空间
+    col_sample_method, col_num_rows = st.columns([1,1])
     with col_sample_method:
         test_sample_method = st.radio(
             "选择试标注方式:",
             options=["前 N 行", "随机 N 行"],
             index=0, 
             key="test_sample_method_radio",
-            horizontal=True, # 水平排列选项
+            horizontal=True, 
         )
     
     df_len = len(current_df) if current_df is not None else 0
 
     with col_num_rows:
         num_test_rows_default = min(5, df_len) if df_len > 0 else 1
-        num_test_rows_max = min(20, df_len) if df_len > 0 else 1
+        num_test_rows_max = min(20, df_len) if df_len > 0 else 1 # Max 20 for test
         
         num_test_rows = st.number_input(
             "选择试标注的行数 (N):", 
@@ -61,19 +62,18 @@ def display_run_labeling_tab():
             max_value=num_test_rows_max, 
             value=num_test_rows_default, 
             step=1, 
-            key="num_test_rows_input_v2",
-            disabled=(df_len == 0) # 如果没数据则禁用
+            key="num_test_rows_input_v2", # Changed key to avoid conflicts if old one was used
+            disabled=(df_len == 0) 
         )
 
     if st.button(f"执行试标注", key="run_test_labeling_btn", disabled=(df_len == 0)):
         if st.session_state.get('labeling_progress', {}).get('is_running'):
             st.error("已有标注任务进行中，请等待完成或检查是否有未处理的错误。")
         else:
-            # 选择 DataFrame 子集进行测试
             if test_sample_method == "前 N 行":
                 test_df = current_df.head(num_test_rows)
             elif test_sample_method == "随机 N 行":
-                sample_n = min(num_test_rows, df_len) # 确保不采样超过总行数
+                sample_n = min(num_test_rows, df_len) 
                 if sample_n > 0 :
                     test_df = current_df.sample(n=sample_n, random_state=None) # random_state=None 每次都随机
                 else:
@@ -87,25 +87,34 @@ def display_run_labeling_tab():
                 st.session_state.labeling_progress = {
                     'is_running': True, 
                     'completed': 0,
-                    'total': len(test_df), # total 现在是实际测试的行数
+                    'total': len(test_df), 
                     'results': {}, 
                     'is_test_run': True
                 }
                 
                 st.info(f"开始对 {len(test_df)} 条数据（方式：{test_sample_method}）进行试标注...")
                 progress_bar_test = st.progress(0)
-                progress_text_test = st.empty() # 用于显示文本进度
+                progress_text_test = st.empty() 
                 results_container = st.container() 
                 results_container.markdown("---") 
+
+                # Get ordered_keys for process_single_row
+                ordered_keys = st.session_state.get('ordered_input_cols_for_prompt', [])
+                if not ordered_keys:
+                    st.error("错误：未能获取用于Prompt的有序输入列列表 (ordered_input_cols_for_prompt)。请确保在“生成AI指令”步骤中已正确生成。")
+                    st.session_state.labeling_progress['is_running'] = False # Stop the process
+                    return # Stop execution
 
                 try:
                     for original_idx, row_series in test_df.iterrows():
                         row_dict = row_series.to_dict()
                         
+                        # Pass ordered_keys to process_single_row
                         actual_idx, result_data = process_single_row(
                             (original_idx, row_dict), 
                             final_prompt, 
                             st.session_state.api_config,
+                            ordered_keys, # Pass the ordered list of column names
                             st.session_state.retry_attempts, 
                             st.session_state.request_delay
                         )
@@ -120,12 +129,8 @@ def display_run_labeling_tab():
                         progress_bar_test.progress(progress_percentage)
                         progress_text_test.text(f"试标注进度: {completed_count}/{total_count} 条已处理")
 
-                        # --- 实时显示当前行的结果 ---
                         with results_container:
-                            # test_df.index.get_loc(actual_idx) 对于随机抽样可能不按顺序，所以显示一个累进的行号更合适
-                            # 或者我们找到 actual_idx 在原始 current_df 中的位置，但对于试标注，简单计数可能更好
                             current_display_count = st.session_state.labeling_progress['completed']
-
                             st.markdown(f"##### 处理结果 {current_display_count} (原始行索引: {actual_idx})")
                             
                             prompt_sent_display = result_data.get("prompt_sent")
@@ -145,7 +150,6 @@ def display_run_labeling_tab():
                                     with st.expander(f"查看原始响应 (原始行索引: {actual_idx} - 通常在JSON解析失败时)", expanded=False):
                                         st.code(raw_response_display, language='text', line_numbers=False)
                             st.markdown("---") 
-                        # --- 实时显示结束 ---
                     
                     progress_text_test.text(f"试标注完成: {st.session_state.labeling_progress['completed']}/{st.session_state.labeling_progress['total']} 条已处理。")
                     st.success("试标注完成！")
@@ -155,7 +159,7 @@ def display_run_labeling_tab():
                 finally:
                     st.session_state.labeling_progress['is_running'] = False
     
-    # --- Full Data Labeling Section (保持之前的逻辑) ---
+    # --- Full Data Labeling Section ---
     st.divider()
     st.subheader("🚀 全量数据标注")
     if st.button("开始全量标注所有数据", type="primary", key="run_full_labeling_btn"):
@@ -186,10 +190,18 @@ def display_run_labeling_tab():
             retries = st.session_state.retry_attempts
             delay = st.session_state.request_delay
 
+            # Get ordered_keys for process_single_row to be used by threads
+            ordered_keys = st.session_state.get('ordered_input_cols_for_prompt', [])
+            if not ordered_keys:
+                st.error("错误：未能获取用于Prompt的有序输入列列表 (ordered_input_cols_for_prompt)。请确保在“生成AI指令”步骤中已正确生成。")
+                st.session_state.labeling_progress['is_running'] = False # Stop the process
+                return # Stop execution
+
             try:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                    # Pass ordered_keys to process_single_row in executor.submit
                     future_to_idx_map = {
-                        executor.submit(process_single_row, item, final_prompt, api_conf, retries, delay): item[0]
+                        executor.submit(process_single_row, item, final_prompt, api_conf, ordered_keys, retries, delay): item[0]
                         for item in data_for_exec
                     }
                     for future in concurrent.futures.as_completed(future_to_idx_map):
@@ -221,7 +233,6 @@ def display_run_labeling_tab():
 
     # --- Display Stats and Errors ---
     current_prog = st.session_state.get('labeling_progress', {})
-    # 只在非运行状态下显示统计，避免运行时因结果不全导致误解
     if current_prog and current_prog.get('completed', 0) > 0 and not current_prog.get('is_running'):
         st.subheader("最新标注运行统计") 
         
@@ -229,16 +240,8 @@ def display_run_labeling_tab():
         total_actually_processed_in_results = len(valid_results)
         
         if total_actually_processed_in_results > 0:
-            # 根据 is_test_run 标志判断是哪种运行的统计
-            # 如果用户先试标注，再全量，results 会被全量覆盖，所以is_test_run会是False
-            # 如果只进行了试标注，is_test_run 会是 True
             run_type_str = "试标注" if current_prog.get('is_test_run') else "全量标注"
-            
-            # total 应该是当次运行的总数，而不是累积的
             total_for_this_run = current_prog.get('total', 0) 
-            # completed_for_this_run 也应该是当次运行完成的，当前 completed 会累积
-            # 但我们用 total_actually_processed_in_results 来统计实际有结果的条目数
-
             success_c = sum(1 for res_d in valid_results.values() if res_d.get('success'))
             error_c = total_actually_processed_in_results - success_c
 
@@ -255,10 +258,9 @@ def display_run_labeling_tab():
         else:
             st.caption("当前运行未记录有效结果用于统计。")
 
-            # --- 新增：引导到下一步 ---
     current_prog = st.session_state.get('labeling_progress', {})
     if current_prog and current_prog.get('completed', 0) > 0 and not current_prog.get('is_running'):
-        if current_prog.get('results'): # 确保有结果
+        if current_prog.get('results'): 
             st.success("🎉 标注任务已执行！")
             st.info("下一步：请前往 **📥 5. 下载与总结** 标签页，预览、统计并下载包含标注结果的数据。")
-            st.markdown("---") # 可选的分隔线
+            st.markdown("---")

@@ -45,6 +45,10 @@ def init_session_state():
         st.session_state.generated_prompt_template = ""
     if 'final_user_prompt' not in st.session_state: # 发送给LLM处理每行数据的Prompt (原 processed_prompt)
         st.session_state.final_user_prompt = ""
+    # NEW: Initialize ordered_input_cols_for_prompt
+    if 'ordered_input_cols_for_prompt' not in st.session_state:
+        st.session_state.ordered_input_cols_for_prompt = []
+
 
     # --- 标注过程控制 & 结果 ---
     if 'labeling_progress' not in st.session_state:

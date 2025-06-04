@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Tuple, Optional
 import pandas as pd # 用于 pd.isna
 from openai import OpenAI, APIConnectionError, RateLimitError, AuthenticationError, NotFoundError, BadRequestError, APIError
 import streamlit as st # 用于 st.error
+import re # For re.escape and re.sub
 
 def call_openai_api(client: OpenAI, messages: List[Dict[str, str]], config: Dict[str, Any]) -> str:
     """
@@ -22,7 +23,7 @@ def call_openai_api(client: OpenAI, messages: List[Dict[str, str]], config: Dict
     except AuthenticationError as e:
         st.error(f"OpenAI API认证失败: {e}。请检查您的API密钥和组织设置。")
         raise
-    except PermissionError as e: # 通常映射到403 Forbidden
+    except PermissionError as e: 
         st.error(f"OpenAI API权限错误: {e}。您可能没有权限访问此模型或资源。")
         raise
     except RateLimitError as e:
@@ -31,16 +32,16 @@ def call_openai_api(client: OpenAI, messages: List[Dict[str, str]], config: Dict
     except APIConnectionError as e:
         st.error(f"OpenAI API连接错误: {e}。无法连接到OpenAI，请检查网络和API状态。")
         raise
-    except NotFoundError as e: # 通常是模型名称无效
+    except NotFoundError as e: 
         st.error(f"OpenAI API未找到错误: {e}。通常表示指定的模型不正确或不可用。")
         raise
-    except BadRequestError as e: # 通常是Prompt问题或超出上下文长度
+    except BadRequestError as e: 
         st.error(f"OpenAI API错误请求: {e}。可能是请求格式无效、Prompt问题（如过长）或其他参数错误。")
         raise
-    except APIError as e: # OpenAI API的通用错误
+    except APIError as e: 
         st.error(f"OpenAI API发生错误: {e}。OpenAI API发生意外错误。")
         raise
-    except Exception as e: # 其他意外错误
+    except Exception as e: 
         st.error(f"OpenAI API调用期间发生意外错误: {e}")
         raise
 
@@ -54,14 +55,14 @@ def generate_labeling_prompt_template(tasks: List[Dict[str, Any]], api_config: D
 
     task_descriptions = []
     for i, task in enumerate(tasks, 1):
-        input_cols = "、".join(task.get('input_columns', []))
+        input_cols_str = "、".join(task.get('input_columns', []))
         output_col = task.get('output_column', 'UnknownOutput')
         requirement = task.get('requirement', '未指定需求。')
         need_reason = task.get('need_reason', False)
 
         task_desc = f"""
 任务{i}：
-- 输入列：{input_cols}
+- 输入列：{input_cols_str}
 - 输出列：{output_col}
 - 需求：{requirement}
 - 是否需要理由：{'是' if need_reason else '否'}"""
@@ -114,14 +115,14 @@ def generate_labeling_prompt_template(tasks: List[Dict[str, Any]], api_config: D
         generated_template = call_openai_api(client, messages, api_config)
         return generated_template.strip()
     except Exception:
-        # 错误已由 call_openai_api 记录
         return ""
 
 
 def process_single_row(
     row_data_tuple: Tuple[int, Dict[str, Any]],
-    final_prompt_template: str,
+    final_prompt_template: str, # This is the prompt with {col_name} style placeholders
     api_config: Dict[str, Any],
+    ordered_keys_for_prompt: List[str], # New argument for ordered column names
     retry_attempts: int = 3,
     request_delay: float = 0.2
 ) -> Tuple[int, Dict[str, Any]]:
@@ -134,18 +135,38 @@ def process_single_row(
         "raw_response" (API原始响应文本，主要用于JSON解析失败时)。
     """
     row_idx, row_dict = row_data_tuple
-    filled_prompt: Optional[str] = None # 初始化，确保在所有路径中都可能被赋值或为None
-    cleaned_response: Optional[str] = None # 初始化原始响应
+    filled_prompt: Optional[str] = None 
+    cleaned_response: Optional[str] = None 
 
     try:
-        safe_row_values = {}
-        for key, value in row_dict.items():
-            if pd.isna(value) or value is None:
-                safe_row_values[key] = ""
-            else:
-                safe_row_values[key] = str(value)
+        # ---- MODIFIED: Prepare for indexed formatting ----
+        if not ordered_keys_for_prompt:
+            # This case should ideally be prevented by checks in run_labeling_tab.py
+            error_msg = "处理失败: Prompt格式化所需的有序输入列列表 (ordered_keys_for_prompt) 为空。"
+            return row_idx, {
+                "success": False, "result": None, "error": error_msg,
+                "prompt_sent": None, "raw_response": None
+            }
 
-        filled_prompt = final_prompt_template.format(**safe_row_values) # 在此赋值
+        # Prepare ordered values from row_dict, ensuring they are strings
+        ordered_string_values = []
+        for col_key in ordered_keys_for_prompt:
+            value = row_dict.get(col_key) # Get raw value from original row_dict
+            if pd.isna(value) or value is None:
+                ordered_string_values.append("")
+            else:
+                ordered_string_values.append(str(value))
+
+        # Transform the final_prompt_template to use indexed placeholders {0}, {1}, etc.
+        indexed_template_str = final_prompt_template
+        for i, col_name_key in enumerate(ordered_keys_for_prompt):
+            # Escape the column name in case it contains regex special characters
+            escaped_col_name = re.escape(col_name_key)
+            # Replace "{col_name}" with "{i}"
+            indexed_template_str = re.sub(r'\{' + escaped_col_name + r'\}', f'{{{i}}}', indexed_template_str)
+        
+        filled_prompt = indexed_template_str.format(*ordered_string_values)
+        # ---- END MODIFIED ----
 
         client = OpenAI(
             api_key=api_config.get('api_key'),
@@ -153,15 +174,14 @@ def process_single_row(
         )
         messages = [
             {"role": "system", "content": "你是一个专业的数据标注助手。请严格按照JSON格式返回结果。不要添加任何解释性文字或markdown代码块标记。"},
-            {"role": "user", "content": filled_prompt}
+            {"role": "user", "content": filled_prompt} # Use the new filled_prompt
         ]
 
-        for attempt in range(retry_attempts):
+        for attempt in range(retry_attempts + 1): # +1 to make retry_attempts actually be the number of retries
             try:
                 api_response_content = call_openai_api(client, messages, api_config)
-                cleaned_response = api_response_content.strip() # 赋值原始响应
+                cleaned_response = api_response_content.strip() 
 
-                # 清理响应：移除潜在的markdown代码块
                 temp_cleaned_response = cleaned_response 
                 if temp_cleaned_response.startswith("```json"):
                     temp_cleaned_response = temp_cleaned_response[7:]
@@ -170,48 +190,54 @@ def process_single_row(
                 if temp_cleaned_response.endswith("```"):
                     temp_cleaned_response = temp_cleaned_response[:-3]
                 
-                # 使用处理过的版本进行解析
                 parsed_result = json.loads(temp_cleaned_response.strip())
-                time.sleep(request_delay)
+                if request_delay > 0: time.sleep(request_delay) # Apply delay only on success before next call
                 return row_idx, {
                     "success": True, "result": parsed_result, "error": None,
-                    "prompt_sent": filled_prompt, "raw_response": cleaned_response # 包含原始未经二次处理的cleaned_response
+                    "prompt_sent": filled_prompt, "raw_response": cleaned_response 
                 }
 
             except json.JSONDecodeError as je:
-                if attempt == retry_attempts - 1:
-                    error_msg = f"JSON解析失败 ({retry_attempts}次尝试后): {je}。" # 原始响应将在raw_response中提供
+                if attempt == retry_attempts: # Last attempt failed
+                    error_msg = f"JSON解析失败 ({retry_attempts + 1}次尝试后): {je}。"
                     return row_idx, {
                         "success": False, "result": None, "error": error_msg,
                         "prompt_sent": filled_prompt, "raw_response": cleaned_response
                     }
-                time.sleep(1 + attempt * 0.5)
+                time.sleep(1 + attempt * 0.5) # Wait before retrying
 
-            except Exception as e: # 处理 call_openai_api 中的错误或其他问题
-                if attempt == retry_attempts - 1:
-                    error_msg = f"API调用或处理失败 ({retry_attempts}次尝试后): {e}"
+            except Exception as e: 
+                if attempt == retry_attempts: # Last attempt failed
+                    error_msg = f"API调用或处理失败 ({retry_attempts + 1}次尝试后): {e}"
                     return row_idx, {
                         "success": False, "result": None, "error": error_msg,
-                        "prompt_sent": filled_prompt, "raw_response": cleaned_response # 即使API调用失败，也尝试记录原始响应（如果捕获到的话）
+                        "prompt_sent": filled_prompt, "raw_response": cleaned_response 
                     }
-                time.sleep(1 + attempt * 0.5)
+                time.sleep(1 + attempt * 0.5) # Wait before retrying
         
-        # 如果重试次数耗尽仍未成功
+        # Fallback if loop finishes without returning (should not happen with retry_attempts + 1 logic)
         return row_idx, {
-            "success": False, "result": None, "error": f"已耗尽 {retry_attempts} 次重试但未成功。",
+            "success": False, "result": None, "error": f"已耗尽 {retry_attempts + 1} 次重试但未成功。",
             "prompt_sent": filled_prompt, "raw_response": cleaned_response
         }
 
-    except KeyError as ke: # .format()时占位符缺失
-        error_msg = f"处理失败: Prompt格式化错误 - 键 '{ke}' 缺失。请确保Prompt中的所有占位符与数据列名匹配。"
+    except IndexError as ie: # New potential error with .format(*args)
+        error_msg = f"处理失败: Prompt格式化索引错误 - {ie}。可能是Prompt中的索引超出了提供的数据值范围。"
         return row_idx, {
             "success": False, "result": None, "error": error_msg,
-            "prompt_sent": None, "raw_response": None # Prompt构建失败
+            "prompt_sent": filled_prompt, # filled_prompt might be partially formed or the template
+            "raw_response": None
+        }
+    except KeyError as ke: 
+        error_msg = f"处理失败: Prompt格式化错误 - 键 '{ke}' 缺失 (这通常不应发生在使用有序键之后)。请检查ordered_keys_for_prompt。"
+        return row_idx, {
+            "success": False, "result": None, "error": error_msg,
+            "prompt_sent": None, "raw_response": None
         }
     except Exception as e:
         error_msg = f"处理失败 (未知错误): {e}"
         return row_idx, {
             "success": False, "result": None, "error": error_msg,
-            "prompt_sent": filled_prompt, # filled_prompt可能已生成或为None
+            "prompt_sent": filled_prompt, 
             "raw_response": None
         }

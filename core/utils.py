@@ -2,7 +2,7 @@
 import re
 import json
 from typing import List, Dict, Any, Set, Optional
-import streamlit as st # 用于 st.error
+import streamlit as st # 用于 st.error, st.session_state
 
 # def extract_placeholder_columns_from_final_prompt(prompt_text: str) -> List[str]:
 #     """
@@ -19,18 +19,20 @@ import streamlit as st # 用于 st.error
 #     return cleaned_matches
 
 def extract_placeholder_columns_from_final_prompt(prompt_text: str) -> List[str]:
-    """从最终处理后的prompt中提取占位符列名"""
-    # 使用更精确的正则表达式只匹配变量名格式的占位符
-    pattern = r'\{([a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff\s]*)\}'
+    """
+    从最终处理后的Prompt字符串中提取占位符列名。
+    占位符应为 {column_name} 格式. This version captures content within single curly braces.
+    """
+    # This regex captures any characters between single curly braces.
+    # It's suitable because the JSON example in the prompt uses double curly braces {{ and }}.
+    pattern = r'\{([^{}\r\n]+)\}' 
     matches = re.findall(pattern, prompt_text)
     
-    # 清理和去重
     cleaned_matches = []
     for match in matches:
         cleaned = match.strip()
         if cleaned and cleaned not in cleaned_matches:
             cleaned_matches.append(cleaned)
-    
     return cleaned_matches
 
 def _build_final_user_prompt_from_template(
@@ -61,14 +63,35 @@ def _build_final_user_prompt_from_template(
                 "reason": f"针对'{task_output_col}'的判断理由"
             }
         else:
-            output_structure_from_tasks[task_output_col] = {
-                "value": f"针对'{task_output_col}'的标注结果"
-            }
+            # MODIFIED: Ensure value is part of a dictionary even if no reason is needed,
+            # to maintain consistency if the LLM expects a certain structure for all outputs.
+            # However, the original logic was to directly assign the value.
+            # Sticking to original logic for direct value if no reason.
+            # Re-evaluating: The original prompt user provided shows structure like:
+            # "建议股民购买": {{ "value": ..., "reason": ...}}
+            # "涨跌情况": {{ "value": ... }} -> This implies the output JSON from LLM might not always have "reason".
+            # The example output_format_section_escaped should reflect the tasks.
+            # The provided prompt in the question has "涨跌情况": { "value": "..." }
+            # which suggests single value output is also nested under "value" IF output_structure_from_tasks
+            # is built this way.
+            # The current logic for output_structure_from_tasks seems to build:
+            #   output_structure_from_tasks[task_output_col] = {"value": ...} for no_reason
+            # This is fine. The key is that `output_format_section_escaped` correctly shows what LLM should return.
+            output_structure_from_tasks[task_output_col] = f"针对'{task_output_col}'的标注结果"
+
+
+    # ---- NEW: Define and store the order of input columns for the prompt ----
+    # Sort for consistency, matching how they are listed in the info_section
+    ordered_input_cols_for_prompt = sorted(list(all_input_columns))
+    # Ensure st.session_state is available and initialized before trying to set an attribute
+    if 'st' in globals() and hasattr(st, 'session_state'):
+        st.session_state.ordered_input_cols_for_prompt = ordered_input_cols_for_prompt
+    # ---- END NEW ----
 
     # 构建“提供的信息”部分
     info_section = "提供的参考信息：\n"
-    if all_input_columns:
-        for i, col_name in enumerate(sorted(list(all_input_columns)), 1):
+    if ordered_input_cols_for_prompt: # Use the new ordered list
+        for i, col_name in enumerate(ordered_input_cols_for_prompt, 1):
             info_section += f"  {i}. {col_name}: \"{{{col_name}}}\"\n" # 实际数据占位符
     else:
         info_section += "  (无特定输入列在此处列出，请参照下方任务要求中的描述)\n"
@@ -80,17 +103,35 @@ def _build_final_user_prompt_from_template(
             if isinstance(template_task_info, dict):
                 task_name = template_task_info.get("task", f"未命名任务{i}")
                 task_instruction = template_task_info.get("prompt", "无具体指令。")
-                # 确保任务名称与用户定义的输出列名对应，以便用户理解
-                # 这里的task_name应与 defined_labeling_tasks 中的 output_column 对应
                 task_descriptions_from_template.append(f"  任务 {i} (目标输出: '{task_name}'):\n    {task_instruction}")
             else:
                 task_descriptions_from_template.append(f"  任务 {i}: (模板格式错误，无法解析)")
     else:
-        st.warning("Prompt模板JSON中缺少 'prompts' 列表或格式不正确。请检查AI生成的Prompt模板。")
+        if 'st' in globals() and hasattr(st, 'warning'):
+            st.warning("Prompt模板JSON中缺少 'prompts' 列表或格式不正确。请检查AI生成的Prompt模板。")
         task_descriptions_from_template.append("  (无法从模板加载任务指令，请检查Prompt模板)")
 
     # 构建“输出格式”部分，使用从 defined_labeling_tasks 推断的结构
-    output_format_section = json.dumps(output_structure_from_tasks, ensure_ascii=False, indent=2)
+    # Re-adjusting output_structure_from_tasks for the user's example:
+    # The example shows "涨跌情况": { "value": ... } even if no reason.
+    # Let's ensure output_structure_from_tasks consistently uses a dict with "value".
+    output_format_example_for_llm: Dict[str, Any] = {}
+    for task_def in defined_labeling_tasks:
+        task_output_col = task_def.get('output_column')
+        if not task_output_col:
+            continue
+        if task_def.get('need_reason', False):
+            output_format_example_for_llm[task_output_col] = {
+                "value": f"针对'{task_output_col}'的标注结果",
+                "reason": f"针对'{task_output_col}'的判断理由"
+            }
+        else:
+            output_format_example_for_llm[task_output_col] = {
+                "value": f"针对'{task_output_col}'的标注结果"
+            }
+
+
+    output_format_section = json.dumps(output_format_example_for_llm, ensure_ascii=False, indent=2) # Use the adjusted structure
     # 为最终插入行数据的 .format() 转义花括号
     output_format_section_escaped = output_format_section.replace("{", "{{").replace("}", "}}")
 
@@ -130,17 +171,16 @@ def parse_ai_generated_prompt_template(
         try:
             parsed_json_data = json.loads(stripped_template_str)
         except json.JSONDecodeError:
-            pass # 继续尝试下一种方法
+            pass 
         except Exception as e:
-            st.error(f"直接解析AI生成的JSON模板时发生意外错误: {str(e)}")
+            if 'st' in globals() and hasattr(st, 'error'):
+                st.error(f"直接解析AI生成的JSON模板时发生意外错误: {str(e)}")
             return ai_generated_json_template_str
 
     # 尝试2: 如果直接解析失败，尝试从markdown代码块中提取JSON
     if parsed_json_data is None:
-        # 匹配 ```json ... ```
         match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", stripped_template_str, re.DOTALL)
         if not match:
-            # 匹配 ``` ... ``` (没有 'json' 标签)
             match = re.search(r"```\s*(\{[\s\S]*?\})\s*```", stripped_template_str, re.DOTALL)
         
         if match:
@@ -148,12 +188,14 @@ def parse_ai_generated_prompt_template(
             try:
                 parsed_json_data = json.loads(json_substring)
             except json.JSONDecodeError as e_re:
-                st.error(f"从提取的JSON块解析失败: {e_re}。\n提取的块 (前500字符): {json_substring[:500]}...\n原始输出 (前500字符):\n{ai_generated_json_template_str[:500]}...")
+                if 'st' in globals() and hasattr(st, 'error'):
+                    st.error(f"从提取的JSON块解析失败: {e_re}。\n提取的块 (前500字符): {json_substring[:500]}...\n原始输出 (前500字符):\n{ai_generated_json_template_str[:500]}...")
                 return ai_generated_json_template_str
             except Exception as e_fatal_re:
-                st.error(f"解析提取的JSON块时发生意外错误: {e_fatal_re}")
+                if 'st' in globals() and hasattr(st, 'error'):
+                    st.error(f"解析提取的JSON块时发生意外错误: {e_fatal_re}")
                 return ai_generated_json_template_str
-        else: # 最后尝试：找到第一个 '{' 和最后一个 '}'
+        else: 
             start_index = stripped_template_str.find('{')
             end_index = stripped_template_str.rfind('}')
             if start_index != -1 and end_index != -1 and start_index < end_index:
@@ -161,41 +203,45 @@ def parse_ai_generated_prompt_template(
                 try:
                     parsed_json_data = json.loads(json_substring)
                 except json.JSONDecodeError as e_sub:
-                    st.error(f"无法从AI生成的文本中解析JSON模板。尝试提取的子字符串解析失败: {e_sub}。\n请检查AI的输出是否为合法的JSON。原始输出 (前500字符):\n{ai_generated_json_template_str[:500]}...")
+                    if 'st' in globals() and hasattr(st, 'error'):
+                        st.error(f"无法从AI生成的文本中解析JSON模板。尝试提取的子字符串解析失败: {e_sub}。\n请检查AI的输出是否为合法的JSON。原始输出 (前500字符):\n{ai_generated_json_template_str[:500]}...")
                     return ai_generated_json_template_str
                 except Exception as e_fatal_sub:
-                    st.error(f"提取并解析JSON子字符串时发生意外错误: {e_fatal_sub}")
+                    if 'st' in globals() and hasattr(st, 'error'):
+                        st.error(f"提取并解析JSON子字符串时发生意外错误: {e_fatal_sub}")
                     return ai_generated_json_template_str
-            else: # 未找到清晰的JSON结构
-                st.error(f"AI生成的文本不包含有效的JSON结构。请检查AI的输出。原始输出 (前500字符):\n{ai_generated_json_template_str[:500]}...")
+            else: 
+                if 'st' in globals() and hasattr(st, 'error'):
+                    st.error(f"AI生成的文本不包含有效的JSON结构。请检查AI的输出。原始输出 (前500字符):\n{ai_generated_json_template_str[:500]}...")
                 return ai_generated_json_template_str
 
-    # 如果JSON数据成功解析
     if parsed_json_data is not None:
         try:
             if not isinstance(parsed_json_data, dict):
-                st.error(f"解析得到的JSON模板不是一个对象 (字典): 类型为 {type(parsed_json_data)}。\n内容 (前200字符): {str(parsed_json_data)[:200]}...")
+                if 'st' in globals() and hasattr(st, 'error'):
+                    st.error(f"解析得到的JSON模板不是一个对象 (字典): 类型为 {type(parsed_json_data)}。\n内容 (前200字符): {str(parsed_json_data)[:200]}...")
                 return ai_generated_json_template_str
 
-            # 验证模板结构
             if "prompts" not in parsed_json_data or not isinstance(parsed_json_data["prompts"], list):
-                st.error("AI生成的JSON模板缺少 'prompts' 键，或其值不是一个列表。请确保AI遵循指定的输出格式。")
-                st.json(parsed_json_data) # 显示解析到的内容
+                if 'st' in globals() and hasattr(st, 'error'):
+                    st.error("AI生成的JSON模板缺少 'prompts' 键，或其值不是一个列表。请确保AI遵循指定的输出格式。")
+                    if hasattr(st, 'json'): st.json(parsed_json_data) 
                 return ai_generated_json_template_str
 
             for item in parsed_json_data["prompts"]:
                 if not isinstance(item, dict) or "task" not in item or "prompt" not in item:
-                    st.error("AI生成的JSON模板中 'prompts' 列表内的元素格式不正确。每个元素应为包含 'task' 和 'prompt'键的字典。")
-                    st.json(parsed_json_data)
+                    if 'st' in globals() and hasattr(st, 'error'):
+                        st.error("AI生成的JSON模板中 'prompts' 列表内的元素格式不正确。每个元素应为包含 'task' 和 'prompt'键的字典。")
+                        if hasattr(st, 'json'): st.json(parsed_json_data)
                     return ai_generated_json_template_str
-
-            # 验证通过，则构建最终用户Prompt
+            
             return _build_final_user_prompt_from_template(parsed_json_data, defined_labeling_tasks)
 
         except Exception as e:
-            st.error(f"构建最终用户prompt时出错: {str(e)}。\n解析到的JSON模板 (前500字符): {str(parsed_json_data)[:500]}")
+            if 'st' in globals() and hasattr(st, 'error'):
+                st.error(f"构建最终用户prompt时出错: {str(e)}。\n解析到的JSON模板 (前500字符): {str(parsed_json_data)[:500]}")
             return ai_generated_json_template_str
 
-    # 如果所有尝试都失败了
-    st.error("未能从AI的输出中成功解析JSON模板。")
+    if 'st' in globals() and hasattr(st, 'error'):
+        st.error("未能从AI的输出中成功解析JSON模板。")
     return ai_generated_json_template_str

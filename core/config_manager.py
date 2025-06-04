@@ -65,11 +65,12 @@ def save_current_task_config(name: str, data_path: Optional[str] = None) -> Opti
 
     api_config = st.session_state.get('api_config', {})
     labeling_tasks = st.session_state.get('labeling_tasks', [])
-    generated_prompt_template = st.session_state.get('generated_prompt_template', "") # 新名称
-    final_user_prompt = st.session_state.get('final_user_prompt', "") # 新名称
+    generated_prompt_template = st.session_state.get('generated_prompt_template', "")
+    final_user_prompt = st.session_state.get('final_user_prompt', "")
     concurrent_workers = st.session_state.get('concurrent_workers', 4)
     retry_attempts = st.session_state.get('retry_attempts', 3)
     request_delay = st.session_state.get('request_delay', 0.2)
+    ordered_input_cols = st.session_state.get('ordered_input_cols_for_prompt', [])
 
     config = {
         'name': name,
@@ -78,10 +79,11 @@ def save_current_task_config(name: str, data_path: Optional[str] = None) -> Opti
         'labeling_tasks': labeling_tasks.copy() if isinstance(labeling_tasks, list) else [],
         'generated_prompt_template': generated_prompt_template,
         'final_user_prompt': final_user_prompt,
-        'data_path': data_path, # 保存数据文件路径
+        'data_path': data_path,
         'concurrent_workers': concurrent_workers,
         'retry_attempts': retry_attempts,
-        'request_delay': request_delay
+        'request_delay': request_delay,
+        'ordered_input_cols_for_prompt': ordered_input_cols 
     }
 
     task_configs[name] = config

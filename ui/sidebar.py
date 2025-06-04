@@ -8,7 +8,6 @@ from core.config_manager import (
     load_task_configs, save_task_configs, save_current_task_config,
     check_data_file_exists
 )
-# 导入新的持久化函数和数据加载函数
 from core.data_handler import load_data_from_path, persist_dataframe_on_server
 from ui.ui_utils import refresh_task_form, refresh_data_editor
 
@@ -17,7 +16,6 @@ def display_sidebar():
     with st.sidebar:
         st.title("🛠️ 工具配置")
 
-        # --- Section 1: 任务流程管理 (默认展开) ---
         with st.expander("📋 任务流程管理", expanded=True):
             st.subheader("保存当前任务流程")
             current_task_name_input = st.text_input(
@@ -26,17 +24,15 @@ def display_sidebar():
                 key="sidebar_task_name_input"
             ).strip()
 
-            # 条件化显示“持久化数据”选项
             show_persist_data_option = False
             if st.session_state.get('df') is not None and st.session_state.get('current_data_path') is None:
-                # 仅当数据已加载且不是从现有路径加载时（即通过上传加载）
                 show_persist_data_option = True
             
-            persist_data_checkbox = False # 初始化
+            persist_data_checkbox = False 
             if show_persist_data_option:
                 persist_data_checkbox = st.checkbox(
                     "同时保存当前已上传数据的副本?",
-                    value=False, # 默认不勾选
+                    value=False, 
                     help="如果勾选，当前通过“文件上传”加载的数据将被保存到服务器的一个副本，并将该副本路径与此任务流程关联。否则，此任务流程将不关联特定数据文件路径（除非数据本身是从路径加载的）。",
                     key="sidebar_persist_data_checkbox"
                 )
@@ -47,10 +43,9 @@ def display_sidebar():
                 elif not st.session_state.get('labeling_tasks'):
                     st.error("请先在“2. 定义打标任务”标签页中定义至少一个打标任务。")
                 else:
-                    data_path_to_save = st.session_state.get('current_data_path') # 默认使用已有的路径
+                    data_path_to_save = st.session_state.get('current_data_path') 
 
                     if show_persist_data_option and persist_data_checkbox:
-                        # 用户选择持久化上传的数据
                         current_df = st.session_state.get('df')
                         original_file_name_for_persist = st.session_state.get('_uploaded_file_name_for_download_')
 
@@ -58,12 +53,11 @@ def display_sidebar():
                             saved_server_path = persist_dataframe_on_server(current_df, original_file_name_for_persist)
                             if saved_server_path:
                                 data_path_to_save = saved_server_path
-                                # 更新会话中的current_data_path，以便UI能立即反映这个新路径
                                 st.session_state.current_data_path = saved_server_path 
                                 st.success(f"上传的数据副本已保存到服务器，并与此流程关联。")
                             else:
                                 st.error("尝试保存上传数据副本失败。此任务流程将不关联特定数据路径。")
-                                data_path_to_save = None # 确保如果持久化失败，不保存错误的路径
+                                data_path_to_save = None 
                         else:
                             st.warning("无法找到要持久化的数据或原始文件名。任务流程将不关联特定数据路径。")
                             data_path_to_save = None
@@ -71,7 +65,7 @@ def display_sidebar():
                     try:
                         save_current_task_config(current_task_name_input, data_path_to_save)
                         st.success(f"任务流程配置 '{current_task_name_input}' 已保存！")
-                        st.rerun() # 刷新侧边栏列表
+                        st.rerun() 
                     except Exception as e:
                         st.error(f"保存任务流程配置失败: {str(e)}")
             
@@ -129,11 +123,12 @@ def display_sidebar():
                                 st.session_state.concurrent_workers = task_to_load.get('concurrent_workers', st.session_state.concurrent_workers)
                                 st.session_state.retry_attempts = task_to_load.get('retry_attempts', st.session_state.retry_attempts)
                                 st.session_state.request_delay = task_to_load.get('request_delay', st.session_state.request_delay)
+                                st.session_state.ordered_input_cols_for_prompt = task_to_load.get('ordered_input_cols_for_prompt', [])
                                 
                                 st.session_state.df = None 
                                 st.session_state.current_data_path = None
                                 st.session_state._uploaded_file_name_for_download_ = None
-                                if 'last_uploaded_file_details' in st.session_state: # 重置文件上传状态
+                                if 'last_uploaded_file_details' in st.session_state: 
                                     del st.session_state.last_uploaded_file_details
 
                                 if can_load_data_from_path and data_path_from_config:
@@ -165,7 +160,6 @@ def display_sidebar():
                                 st.session_state[confirm_key_task_del] = True
                                 st.warning(f"再次点击确认删除任务流程 '{selected_hist_task_name}'。")
         
-        # --- Section 2: API 调用配置 ---
         with st.expander("🔑 API 调用配置", expanded=False):
             api_configs_on_disk = load_api_configs()
             config_names = list(api_configs_on_disk.keys())
@@ -194,7 +188,7 @@ def display_sidebar():
             base_url_val = st.text_input("Base URL", value=current_api_conf.get('base_url', 'https://api.deepseek.com'), key="sidebar_base_url")
             model_name_val = st.text_input("模型名称", value=current_api_conf.get('model_name', 'deepseek-chat'), key="sidebar_model_name")
             temperature_val = st.slider("Temperature", 0.0, 2.0, float(current_api_conf.get('temperature', 0.05)), 0.01, key="sidebar_temperature")
-            max_tokens_val = st.number_input("最大Token数 (响应)", 50, 32000, int(current_api_conf.get('max_tokens', 1500)), 50, key="sidebar_max_tokens") # Increased max_tokens limit
+            max_tokens_val = st.number_input("最大Token数 (响应)", 50, 32000, int(current_api_conf.get('max_tokens', 1500)), 50, key="sidebar_max_tokens")
 
             st.session_state.api_config.update({
                 'api_key': api_key_val, 'base_url': base_url_val, 'model_name': model_name_val,
@@ -229,7 +223,6 @@ def display_sidebar():
                             st.session_state[confirm_key_api_del] = True
                             st.warning(f"再次点击确认删除API配置 '{selected_api_config_name}'。")
         
-        # --- Section 3: 执行参数配置 ---
         with st.expander("⚙️ 执行参数配置", expanded=False):
             st.session_state.concurrent_workers = st.slider(
                 "并发线程数", 1, 20, 
