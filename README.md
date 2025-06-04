@@ -2,6 +2,9 @@
 
 体验链接: https://tablelabelingtool-bingxuan.streamlit.app/
 
+
+打包好的windows exe请点击[夸克网盘链接](https://pan.quark.cn/s/fe9b8f43e2f9)
+
 > **请不要在体验链接内保存您的API配置**
 
 🏷️ 本工具是一个基于Streamlit的Web应用程序，旨在帮助用户通过大型语言模型（LLM，如GPT系列）对表格数据（如CSV, Excel文件）进行自动化的数据标注、信息提取、分类等任务。
@@ -139,7 +142,6 @@ streamlit run app.py
 
 可以参考[知乎回答](https://zhuanlan.zhihu.com/p/695939376)的教程
 
-打包好的exe请点击[夸克网盘链接](https://pan.quark.cn/s/530f167e617b)
 
 
 ---
