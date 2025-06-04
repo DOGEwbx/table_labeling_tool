@@ -3,7 +3,7 @@
 体验链接: https://tablelabelingtool-bingxuan.streamlit.app/
 
 
-打包好的windows exe请点击[夸克网盘链接](https://pan.quark.cn/s/fe9b8f43e2f9)
+打包好的windows exe请点击[夸克网盘链接](https://pan.quark.cn/s/d0360a24b2af)
 
 > **请不要在体验链接内保存您的API配置**
 
