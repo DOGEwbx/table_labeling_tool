@@ -2,6 +2,8 @@
 
 体验链接: https://tablelabelingtool-bingxuan.streamlit.app/
 
+> **请不要在体验链接内保存您的API配置**
+
 🏷️ 本工具是一个基于Streamlit的Web应用程序，旨在帮助用户通过大型语言模型（LLM，如GPT系列）对表格数据（如CSV, Excel文件）进行自动化的数据标注、信息提取、分类等任务。
 
 ## ✨ 主要功能
@@ -21,7 +23,7 @@
     * **模板编辑与最终Prompt预览**: 用户可以编辑AI生成的JSON模板，并实时预览根据该模板构建的、将用于处理每一行数据的最终用户Prompt。
     * **占位符校验**: 对比最终用户Prompt中的占位符（如`{列名}`）与已加载数据的列名，确保匹配。
 * **可配置的AI调用**:
-    * 支持配置API Key, Base URL (兼容OpenAI及其他兼容API)。
+    * 支持配置API Key, Base URL (兼容DeepSeek及其他OpenAI格式API)。
     * 可调整模型名称、Temperature、Max Tokens等参数。
     * 支持API配置的保存与加载。
 * **高效的标注执行**:
@@ -84,11 +86,12 @@ table_labeling_tool/
 ### 配置
 
 1.  **API密钥**:
-    首次运行应用后，在左侧边栏的 "API 调用配置" 部分填入您的OpenAI API密钥和Base URL（如果不是使用官方OpenAI服务）。
+    首次运行应用后，在左侧边栏的 "API 调用配置" 部分填入您的OpenAI API密钥和Base URL。
     * **API Key**: 您的LLM服务提供商的API密钥。
     * **Base URL**: API的端点地址。
-    * **模型名称**: 您希望使用的模型，例如 `gpt-4o`, `gpt-3.5-turbo`。
+    * **模型名称**: 您希望使用的模型。
     * 其他参数如 Temperature, Max Tokens 可按需调整。
+    * DeepSeek API的配置和使用可以参考[DeepSeek官方文档](https://api-docs.deepseek.com/zh-cn/)
 2.  **保存配置**:
     您可以为当前API配置命名并保存，方便后续快速加载。API配置和任务流程配置默认保存在项目根目录下的 `.streamlit_labeling_configs` 文件夹中。
 
